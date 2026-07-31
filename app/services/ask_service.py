@@ -66,19 +66,26 @@ class AskService:
         return await asyncio.to_thread(self._generate_ollama, prompt)
 
     def _generate_ollama(self, prompt: str) -> str:
-        response = requests.post(
-            f"{self.settings.ollama_base_url.rstrip('/')}/api/generate",
-            json={
-                "model": self.settings.ollama_text_model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": 0.2,
+        try:
+            response = requests.post(
+                f"{self.settings.ollama_base_url.rstrip('/')}/api/generate",
+                json={
+                    "model": self.settings.ollama_text_model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.2,
+                    },
                 },
-            },
-            timeout=self.settings.ollama_timeout,
-        )
-        response.raise_for_status()
+                timeout=self.settings.ollama_timeout_seconds,
+            )
+            response.raise_for_status()
+        except requests.RequestException as err:
+            return (
+                "Ollama tidak bisa dihubungi. "
+                f"Cek OLLAMA_BASE_URL={self.settings.ollama_base_url} dan pastikan service Ollama aktif. "
+                f"Detail: {err}"
+            )[:1900]
         data = response.json()
         answer = (data.get("response") or "").strip()
         if not answer:

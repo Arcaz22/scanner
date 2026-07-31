@@ -88,7 +88,7 @@ class Settings(BaseSettings):
     # ── Ollama Local LLM ─────────────────────────────────────────────────────
     ollama_base_url: str = Field("http://172.20.160.1:11434", alias="OLLAMA_BASE_URL")
     ollama_text_model: str = Field("llama3.1:8b", alias="OLLAMA_TEXT_MODEL")
-    ollama_timeout: int = Field(60, alias="OLLAMA_TIMEOUT")
+    ollama_timeout_seconds: int = Field(60, alias="OLLAMA_TIMEOUT_SECONDS")
 
     # ── Schedule Settings ─────────────────────────────────────────────────────
     daily_scan_hour: int = Field(6, alias="DAILY_SCAN_HOUR")
