@@ -1,0 +1,53 @@
+name: Deploy Scanner Bot
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/scanner-bot:latest .
+          docker push ${{ secrets.DOCKER_USERNAME }}/scanner-bot:latest
+
+      - name: Install cloudflared
+        run: |
+          curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared.deb
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.MINI_PC_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      - name: Configure SSH over Cloudflare Tunnel
+        run: |
+          cat <<EOF >> ~/.ssh/config
+          Host mini-pc
+            HostName ssh.rampung.space
+            User ${{ secrets.MINI_PC_USER }}
+            IdentityFile ~/.ssh/id_rsa
+            StrictHostKeyChecking no
+            ProxyCommand cloudflared access ssh --hostname %h
+          EOF
+
+      - name: Deploy Scanner to Mini PC
+        run: |
+          ssh mini-pc "cd ~/infrastructure && \
+            docker compose pull app-scanner-bot app-scanner-cron && \
+            docker compose up -d app-scanner-bot app-scanner-cron && \
+            docker compose ps app-scanner-bot app-scanner-cron && \
+            echo '✓ Scanner Bot successfully deployed!'"

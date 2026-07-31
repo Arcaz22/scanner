@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     )
 
     # ── Environment ───────────────────────────────────────────────────────────
-    env: str = Field("development", alias="ENV")
+    env: str = Field("development", alias="APP_ENV")
 
     @property
     def is_production(self) -> bool:
@@ -87,7 +87,7 @@ class Settings(BaseSettings):
 
     # ── Ollama Local LLM ─────────────────────────────────────────────────────
     ollama_base_url: str = Field("http://172.20.160.1:11434", alias="OLLAMA_BASE_URL")
-    ollama_model: str = Field("llama3.1:8b", alias="OLLAMA_MODEL")
+    ollama_text_model: str = Field("llama3.1:8b", alias="OLLAMA_TEXT_MODEL")
     ollama_timeout: int = Field(60, alias="OLLAMA_TIMEOUT")
 
     # ── Schedule Settings ─────────────────────────────────────────────────────

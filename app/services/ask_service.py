@@ -69,7 +69,7 @@ class AskService:
         response = requests.post(
             f"{self.settings.ollama_base_url.rstrip('/')}/api/generate",
             json={
-                "model": self.settings.ollama_model,
+                "model": self.settings.ollama_text_model,
                 "prompt": prompt,
                 "stream": False,
                 "options": {
