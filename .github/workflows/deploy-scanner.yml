@@ -47,7 +47,7 @@ jobs:
       - name: Deploy Scanner to Mini PC
         run: |
           ssh mini-pc "cd ~/infrastructure && \
-            docker compose pull app-scanner-bot app-scanner-cron && \
-            docker compose up -d app-scanner-bot app-scanner-cron && \
-            docker compose ps app-scanner-bot app-scanner-cron && \
+            docker compose pull app-scanner-bot && \
+            docker compose up -d app-scanner-bot && \
+            docker compose ps app-scanner-bot && \
             echo '✓ Scanner Bot successfully deployed!'"
