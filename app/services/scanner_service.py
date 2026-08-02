@@ -95,9 +95,10 @@ class ScannerService:
         self,
         source: str | Path,
         source_file: str | None = None,
+        ticker_hint: str | None = None,
     ) -> list[BrokerSummaryData]:
         adapter = BrokerSummaryVisionAdapter()
-        rows = adapter.load(source, source_file=source_file)
+        rows = adapter.load(source, source_file=source_file, ticker_hint=ticker_hint)
         updated: list[BrokerSummaryData] = []
 
         async with get_session_factory()() as db:

@@ -12,6 +12,7 @@ Bot berjalan sebagai poller sehingga cocok untuk deploy sederhana tanpa public w
 
 import asyncio
 import os
+import re
 import sys
 from pathlib import Path
 from tempfile import gettempdir
@@ -94,7 +95,7 @@ class DiscordFundamentalBot:
                             "nama file harus mengandung ticker, contoh FinancialStatement-2026-II-BBCA.xlsx"
                         )
                     self._delete_message(message["id"])
-                elif content == "/broker":
+                elif content == "/broker" or content.startswith("/broker "):
                     attachment = self._get_attachment(
                         message,
                         self.ALLOWED_CSV_SUFFIXES | self.ALLOWED_IMAGE_SUFFIXES,
@@ -109,6 +110,7 @@ class DiscordFundamentalBot:
                         updated = await self.service.update_broker_summary_screenshot(
                             downloaded_path,
                             source_file=attachment.get("filename", ""),
+                            ticker_hint=self._broker_ticker_hint(raw_content),
                         )
                     else:
                         updated = await self.service.update_broker_summary(
@@ -145,6 +147,7 @@ class DiscordFundamentalBot:
             "**Perintah Scanner**\n"
             "`/add` + attachment `.xlsx/.xls` - simpan fundamental emiten.\n"
             "`/broker` + attachment `.png/.jpg/.jpeg/.webp` - parse screenshot broker summary pakai moondream.\n"
+            "`/broker GMFI` + attachment gambar - pakai GMFI jika ticker tidak terlihat di screenshot.\n"
             "`/broker` + attachment `.csv` - import broker summary dari CSV.\n"
             "`/scan` - scan broker summary terbaru, filter fundamental, cek Tavily bila perlu, lalu kirim report.\n"
             "`/ask rangkum` - ringkasan broker summary terbaru.\n"
@@ -152,6 +155,13 @@ class DiscordFundamentalBot:
             "`/ask top akumulasi` - ranking akumulasi broker.\n"
             "`/ask foreign net buy` - ranking foreign net buy."
         )
+
+    def _broker_ticker_hint(self, content: str) -> str | None:
+        parts = content.strip().split(maxsplit=1)
+        if len(parts) < 2:
+            return None
+        match = re.search(r"\b[A-Za-z]{4,5}\b", parts[1].upper())
+        return match.group(0) if match else None
 
     def _fetch_messages(self) -> list[dict[str, Any]]:
         params = {"limit": 20}

@@ -21,6 +21,7 @@ Perintah Discord:
 /help
 /add
 /broker
+/broker GMFI
 /scan
 /ask rangkum
 /ask BBCA
@@ -57,6 +58,7 @@ OLLAMA_VISION_MODEL=moondream uv run python main.py broker-screenshot --source b
 ```
 
 Di Discord, kirim `/broker` dengan attachment `.png`, `.jpg`, `.jpeg`, atau `.webp`.
+Jika screenshot tidak menampilkan ticker, gunakan `/broker GMFI`.
 
 Tanya data yang sudah ada di database:
 
