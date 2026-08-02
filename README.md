@@ -59,6 +59,7 @@ OLLAMA_VISION_MODEL=moondream uv run python main.py broker-screenshot --source b
 
 Di Discord, kirim `/broker` dengan attachment `.png`, `.jpg`, `.jpeg`, atau `.webp`.
 Jika screenshot tidak menampilkan ticker, gunakan `/broker GMFI`.
+Untuk banyak screenshot dalam satu pesan, ticker harus terlihat di setiap gambar. Jika screenshot browser tidak punya ticker, kirim satu per satu dengan `/broker TICKER` atau gunakan CSV.
 
 Tanya data yang sudah ada di database:
 

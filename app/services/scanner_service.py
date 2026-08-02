@@ -111,6 +111,37 @@ class ScannerService:
         logger.info("Broker summary screenshot updated: %s saham", len(updated))
         return updated
 
+    async def update_broker_summary_values(
+        self,
+        ticker: str,
+        buy_values: list[float],
+        sell_values: list[float],
+        close: float | None = None,
+        source_file: str = "discord_manual",
+    ) -> BrokerSummaryData:
+        if not buy_values or not sell_values:
+            raise ValueError("buy dan sell wajib berisi minimal satu nilai.")
+
+        data = BrokerSummaryData(
+            ticker=ticker.upper(),
+            date=datetime.now().date(),
+            top3_buy_val=sum(sorted(buy_values, reverse=True)[:3]),
+            top3_sell_val=sum(sorted(sell_values, reverse=True)[:3]),
+            net_foreign_val=0.0,
+            total_buy_val=sum(buy_values),
+            total_sell_val=sum(sell_values),
+            close=close,
+            source_file=source_file,
+        )
+
+        async with get_session_factory()() as db:
+            repository = BrokerSummaryRepository(db)
+            await repository.upsert(data)
+            await db.commit()
+
+        logger.info("Broker summary manual updated: %s", data.ticker)
+        return data
+
     async def run_daily_scan(self, include_news: bool = True) -> DailyReport:
         report = DailyReport(date=datetime.now())
 
