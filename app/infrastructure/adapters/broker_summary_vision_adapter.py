@@ -1,4 +1,5 @@
 import base64
+import json
 import re
 from datetime import date
 from pathlib import Path
@@ -33,11 +34,23 @@ class BrokerSummaryVisionAdapter:
         path = Path(source)
         logger.info("Vision parse start file=%s ticker_hint=%s model=%s", source_file or path.name, ticker_hint or "-", self.settings.ollama_vision_model)
         ticker = normalize_ticker(ticker_hint) if ticker_hint else self._read_ticker(path, source_file or path.name)
-        buy_text = self._ask_values(path, "B.val")
-        sell_text = self._ask_values(path, "S.val")
-        buy_values = self._money_tokens(buy_text)
-        sell_values = self._money_tokens(sell_text)
-        close = self._read_close(path)
+        table_rows = self._read_table_rows(path)
+        buy_values = self._row_money_values(table_rows, "b_val")
+        sell_values = self._row_money_values(table_rows, "s_val")
+        close = self._close_from_rows(table_rows)
+
+        if not buy_values or not sell_values:
+            buy_text = self._ask_values(path, "B.val")
+            sell_text = self._ask_values(path, "S.val")
+            buy_values = buy_values or self._money_tokens(buy_text)
+            sell_values = sell_values or self._money_tokens(sell_text)
+
+        if buy_values == sell_values:
+            logger.warning("Vision B.val and S.val are identical; retrying column prompts")
+            buy_values = self._money_tokens(self._ask_values(path, "B.val"))
+            sell_values = self._money_tokens(self._ask_values(path, "S.val"))
+
+        close = close or self._read_close(path)
 
         logger.info("Vision columns parsed ticker=%s buy_count=%s sell_count=%s", ticker or "-", len(buy_values), len(sell_values))
 
@@ -75,6 +88,23 @@ class BrokerSummaryVisionAdapter:
             close,
         )
         return parsed
+
+    def _read_table_rows(self, path: Path) -> list[dict[str, Any]]:
+        prompt = (
+            "Read this Stockbit Broker Summary table. Return ONLY valid JSON with this shape: "
+            '{"rows":[{"by":"AA","b_val":"100M","b_lot":"1K","b_avg":100,'
+            '"sl":"BB","s_val":"90M","s_lot":"900","s_avg":101}]}. '
+            "The sample values are only a schema example; replace every value with what is visible in the image. "
+            "Read each visible row from top to bottom. "
+            "B.val is the green money column immediately after BY. "
+            "S.val is the red money column immediately after SL. "
+            "Do not swap buy and sell columns. Do not infer hidden rows. "
+            "Use null for unreadable cells. No markdown. No explanation."
+        )
+        text = self._ask_ollama_text(path, prompt, label="table_rows", required=False)
+        rows = self._json_rows(text)
+        logger.info("Vision table rows parsed=%s", len(rows))
+        return rows
 
     def _ask_values(self, path: Path, column_name: str) -> str:
         column_hint = ""
@@ -118,8 +148,9 @@ class BrokerSummaryVisionAdapter:
 
     def _read_close(self, path: Path) -> float | None:
         prompt = (
-            "Read the last stock price in the top header near the ticker. "
-            "Return only the number, for example 54. If not visible, return NONE."
+            "Read the explicit last/close stock price if it is visible in the screen header near the ticker. "
+            "Do not use B.avg, S.avg, B.lot, S.lot, B.val, or S.val. "
+            "Return only the number, for example 360. If no explicit last/close price is visible, return NONE."
         )
         text = self._ask_ollama_text(path, prompt, label="close", required=False)
         if re.search(r"\d\s*[BMK]\b", text.upper()):
@@ -128,6 +159,49 @@ class BrokerSummaryVisionAdapter:
         close = self._optional_number(text)
         logger.info("Vision close parsed=%s", close if close is not None else "-")
         return close
+
+    def _json_rows(self, text: str) -> list[dict[str, Any]]:
+        if not text:
+            return []
+        candidate = text.strip()
+        if candidate.startswith("```"):
+            candidate = re.sub(r"^```(?:json)?\s*", "", candidate, flags=re.IGNORECASE)
+            candidate = re.sub(r"\s*```$", "", candidate)
+        match = re.search(r"\{.*\}", candidate, flags=re.DOTALL)
+        if match:
+            candidate = match.group(0)
+        try:
+            payload = json.loads(candidate)
+        except json.JSONDecodeError:
+            logger.warning("Vision table JSON parse failed response=%r", text[:500])
+            return []
+        rows = payload.get("rows") if isinstance(payload, dict) else payload
+        if not isinstance(rows, list):
+            return []
+        return [row for row in rows if isinstance(row, dict)]
+
+    def _row_money_values(self, rows: list[dict[str, Any]], key: str) -> list[float]:
+        values: list[float] = []
+        for row in rows:
+            value = row.get(key)
+            if isinstance(value, str):
+                matches = self._money_tokens(value)
+                if matches:
+                    values.extend(matches)
+                    continue
+            parsed = self._optional_money_number(value)
+            if parsed is not None:
+                values.append(parsed)
+        return values
+
+    def _close_from_rows(self, rows: list[dict[str, Any]]) -> float | None:
+        for row in reversed(rows):
+            for key in ("s_avg", "b_avg"):
+                close = self._optional_number(row.get(key))
+                if close is not None:
+                    logger.info("Vision close inferred from bottom visible %s=%s", key, close)
+                    return close
+        return None
 
     def _ask_ollama_text(
         self,

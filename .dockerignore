@@ -1,40 +1,17 @@
-# Docker
-docker-compose*.yml
-Dockerfile
-.dockerignore
-
-# CI/CD
-.github/
-
-# Python
+.venv
 __pycache__/
 *.pyc
 *.pyo
-*.pyd
-*.egg-info/
-
-# Environment
+.git
+.gitignore
 .env
 .env.*
-*.env
-
-# Development
-.git/
-.gitignore
 *.md
-.vscode/
-.idea/
-
-# Test & debug scripts
-scripts/debug_*.py
-scripts/test_*.py
-
-# Data files
-watchlist.json
-*.csv
-*.xlsx
-*.xls
-
-# OS
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+tests/
+.github/
+Dockerfile
+.dockerignore
 .DS_Store
-Thumbs.db

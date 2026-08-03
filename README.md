@@ -49,6 +49,18 @@ uv run python main.py broker --source broker_summary.csv
 Kolom CSV minimal: `ticker`, `top3_buy_val`, `top3_sell_val`.
 Kolom opsional: `date`, `net_foreign_val`, `total_buy_val`, `total_sell_val`, `close`.
 
+Jika tidak mau menghitung manual dari screenshot, gunakan format raw rows:
+
+```csv
+ticker,date,close,by,b_val,b_lot,b_avg,sl,s_val,s_lot,s_avg
+ACES,2026-08-02,360,BQ,1B,29K,356,YP,1B,28.9K,358
+ACES,2026-08-02,360,IF,885.8M,24.8K,358,XA,711.5M,20.2K,355
+```
+
+Isi `b_val` dan `s_val` persis seperti tampilan Stockbit, misalnya `1B`, `885.8M`,
+atau `29K`. Program akan menghitung `top3_buy_val`, `top3_sell_val`,
+`total_buy_val`, dan `total_sell_val` otomatis.
+
 Di Discord, kirim `/broker` dengan attachment `.csv`.
 
 Update broker summary dari screenshot via Ollama vision:
