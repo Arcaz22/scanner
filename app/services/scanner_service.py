@@ -10,6 +10,7 @@ from app.domain.notification import NotificationResult
 from app.domain.ports import BrokerSummaryProvider, NewsProvider, ReportNotifier
 from app.domain.report import DailyReport
 from app.infrastructure.adapters.broker_summary_csv_adapter import BrokerSummaryCSVAdapter
+from app.infrastructure.adapters.broker_summary_vision_adapter import BrokerSummaryVisionAdapter
 from app.infrastructure.adapters.idx_fundamental_adapter import IDXFinancialRatioAdapter
 from app.infrastructure.adapters.tavily_adapter import TavilyAdapter
 from app.infrastructure.db.repositories.broker_summary_repository import BrokerSummaryRepository
@@ -17,7 +18,6 @@ from app.infrastructure.db.repositories.fundamental_repository import Fundamenta
 from app.infrastructure.db.repositories.scan_repository import ScanRepository
 from app.infrastructure.db.session import get_session_factory
 from app.services.signal_service import SignalService
-from app.services.watchlist_service import WatchlistService
 
 logger = get_logger(__name__)
 
@@ -25,13 +25,11 @@ logger = get_logger(__name__)
 class ScannerService:
     def __init__(
         self,
-        watchlist_service: WatchlistService | None = None,
         broker_summary: BrokerSummaryProvider | None = None,
         news_provider: NewsProvider | None = None,
         notifier: ReportNotifier | None = None,
         signal_service: SignalService | None = None,
     ):
-        self.watchlist_service = watchlist_service or WatchlistService()
         self.broker_summary = broker_summary
         self.news_provider = news_provider
         self.notifier = notifier
@@ -53,12 +51,11 @@ class ScannerService:
         adapter = IDXFinancialRatioAdapter()
         data = adapter._parse_financial_statement_xlsx(path, ticker)
         data.source_file = source_file or path.name
-        watchlist_names = {item.ticker: item.nama for item in self.watchlist_service.list_saham()}
         company_name = adapter.find_financial_statement_company_name(path)
 
         async with get_session_factory()() as db:
             repository = FundamentalRepository(db)
-            await repository.upsert(data, nama=company_name or watchlist_names.get(data.ticker, ""))
+            await repository.upsert(data, nama=company_name or "")
             await db.commit()
 
         logger.info("Fundamental statement updated: %s", data.ticker)
@@ -82,14 +79,11 @@ class ScannerService:
     async def update_broker_summary(self, source: str | Path, source_file: str | None = None) -> list[BrokerSummaryData]:
         adapter = BrokerSummaryCSVAdapter()
         rows = adapter.load(source, source_file=source_file)
-        watchlist_tickers = set(self.watchlist_service.list_tickers())
         updated: list[BrokerSummaryData] = []
 
         async with get_session_factory()() as db:
             repository = BrokerSummaryRepository(db)
             for data in rows:
-                if data.ticker not in watchlist_tickers:
-                    continue
                 await repository.upsert(data)
                 updated.append(data)
             await db.commit()
@@ -97,8 +91,26 @@ class ScannerService:
         logger.info("Broker summary updated: %s saham", len(updated))
         return updated
 
+    async def update_broker_summary_screenshot(
+        self,
+        source: str | Path,
+        source_file: str | None = None,
+    ) -> list[BrokerSummaryData]:
+        adapter = BrokerSummaryVisionAdapter()
+        rows = adapter.load(source, source_file=source_file)
+        updated: list[BrokerSummaryData] = []
+
+        async with get_session_factory()() as db:
+            repository = BrokerSummaryRepository(db)
+            for data in rows:
+                await repository.upsert(data)
+                updated.append(data)
+            await db.commit()
+
+        logger.info("Broker summary screenshot updated: %s saham", len(updated))
+        return updated
+
     async def run_daily_scan(self, include_news: bool = True) -> DailyReport:
-        saham = self.watchlist_service.list_saham()
         report = DailyReport(date=datetime.now())
 
         news_provider = self.news_provider
@@ -109,33 +121,30 @@ class ScannerService:
             fundamental_repository = FundamentalRepository(db)
             broker_repository = self.broker_summary or BrokerSummaryRepository(db)
             scan_repository = ScanRepository(db)
+            latest_brokers = await broker_repository.get_latest_per_ticker()
 
-            for item in saham:
-                fundamental = await fundamental_repository.get(item.ticker)
-                broker = await broker_repository.get_latest(item.ticker)
+            for broker in latest_brokers:
+                fundamental = await fundamental_repository.get(broker.ticker)
                 signal = self.signal_service.evaluate(None, fundamental, None, broker)
                 news = None
 
                 if include_news and self._should_fetch_news(signal, fundamental, broker):
-                    news = await self._get_news(item.ticker, item.nama, scan_repository, news_provider)
+                    company_name = fundamental.nama if fundamental else ""
+                    news = await self._get_news(broker.ticker, company_name, scan_repository, news_provider)
                     signal = self.signal_service.evaluate(None, fundamental, news, broker)
 
                 scan_repository.save_scan(None, signal)
-                if broker:
-                    report.broker_data[item.ticker] = broker
+                report.broker_data[broker.ticker] = broker
                 if fundamental:
-                    report.fundamental_data[item.ticker] = fundamental
+                    report.fundamental_data[broker.ticker] = fundamental
                 if news:
-                    report.news_data[item.ticker] = news
+                    report.news_data[broker.ticker] = news
                 report.signals.append(signal)
 
             await db.commit()
 
         logger.info("Daily scan complete: %s saham", len(report.signals))
         return report
-
-    async def run_intraday_scan(self, include_news: bool = True) -> DailyReport:
-        return await self.run_daily_scan(include_news=include_news)
 
     def send_daily_report(self, report: DailyReport) -> NotificationResult:
         if self.notifier is None:

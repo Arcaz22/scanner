@@ -49,8 +49,8 @@ class SahamFundamental(Base):
 class DailyScan(Base):
     """
     Tabel: daily_scan
-    Update: setiap hari pagi (06:30)
-    Isi: hasil scan harian per saham (price, volume, signal)
+    Update: saat command scan dijalankan.
+    Isi: hasil scan per saham dari broker summary terbaru.
     """
     __tablename__ = "daily_scan"
 

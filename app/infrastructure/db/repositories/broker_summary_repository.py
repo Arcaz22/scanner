@@ -74,6 +74,25 @@ class BrokerSummaryRepository:
         rows = (await self.db.scalars(stmt)).all()
         return [self._to_domain(row) for row in rows]
 
+    async def get_latest_per_ticker(self, limit: int = 200) -> list[BrokerSummaryData]:
+        rows = await self.get_latest_all(limit=limit * 10)
+        latest: dict[str, BrokerSummaryData] = {}
+        for row in rows:
+            latest.setdefault(row.ticker, row)
+            if len(latest) >= limit:
+                break
+        return list(latest.values())
+
+    async def get_history(self, ticker: str, days: int = 5) -> list[BrokerSummaryData]:
+        stmt = (
+            select(BrokerSummary)
+            .where(BrokerSummary.ticker == ticker.upper())
+            .order_by(BrokerSummary.summary_date.desc(), BrokerSummary.uploaded_at.desc())
+            .limit(days)
+        )
+        rows = (await self.db.scalars(stmt)).all()
+        return [self._to_domain(row) for row in rows]
+
     async def get_top_accumulation(self, limit: int = 10) -> list[BrokerSummaryData]:
         rows = await self.get_latest_all(limit=500)
         rows.sort(key=lambda item: (item.is_big_accumulation, item.accum_ratio, item.top3_buy_val), reverse=True)

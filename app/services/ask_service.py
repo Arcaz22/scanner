@@ -10,12 +10,10 @@ from app.infrastructure.db.repositories.broker_summary_repository import BrokerS
 from app.infrastructure.db.repositories.fundamental_repository import FundamentalRepository
 from app.infrastructure.db.repositories.scan_repository import ScanRepository
 from app.infrastructure.db.session import get_session_factory
-from app.services.watchlist_service import WatchlistService
 
 
 class AskService:
-    def __init__(self, watchlist_service: WatchlistService | None = None) -> None:
-        self.watchlist_service = watchlist_service or WatchlistService()
+    def __init__(self) -> None:
         self.settings = get_settings()
 
     async def answer(self, question: str) -> str:
@@ -27,11 +25,17 @@ class AskService:
             fundamental_repository = FundamentalRepository(db)
             scan_repository = ScanRepository(db)
 
+            if any(word in normalized for word in ("rangkum", "summary", "semua")):
+                rows = await broker_repository.get_latest_per_ticker(limit=20)
+                context = self._broker_list_answer("Ringkasan broker summary terbaru", rows, field="accum")
+                return await self._ask_ollama(question, context)
+
             if ticker:
                 broker = await broker_repository.get_latest(ticker)
+                broker_history = await broker_repository.get_history(ticker, days=5)
                 fundamental = await fundamental_repository.get(ticker)
                 latest_signal = await scan_repository.get_latest(ticker)
-                context = self._ticker_answer(ticker, broker, fundamental, latest_signal)
+                context = self._ticker_answer(ticker, broker, broker_history, fundamental, latest_signal)
                 return await self._ask_ollama(question, context)
 
             if any(word in normalized for word in ("foreign", "asing", "net buy")):
@@ -93,16 +97,15 @@ class AskService:
         return answer[:1900]
 
     def _extract_ticker(self, question: str) -> str | None:
-        watchlist = set(self.watchlist_service.list_tickers())
         for token in re.findall(r"\b[A-Za-z]{4,5}\b", question.upper()):
-            if token in watchlist:
-                return token
+            return token
         return None
 
     def _ticker_answer(
         self,
         ticker: str,
         broker: BrokerSummaryData | None,
+        broker_history: list[BrokerSummaryData],
         fundamental: FundamentalData | None,
         latest_signal,
     ) -> str:
@@ -132,6 +135,10 @@ class AskService:
             )
         else:
             lines.append("Broker summary: belum ada data.")
+
+        if broker_history:
+            trend = ", ".join(f"{row.date}:{row.accum_ratio:.2f}x" for row in broker_history)
+            lines.append(f"Trend akumulasi 5 data terakhir: {trend}")
 
         if latest_signal:
             lines.append(

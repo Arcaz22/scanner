@@ -5,7 +5,7 @@ from app.domain.enums import RiskLevel
 
 @dataclass
 class SahamInfo:
-    """Info dasar saham dari watchlist."""
+    """Info dasar saham."""
 
     ticker: str
     nama: str

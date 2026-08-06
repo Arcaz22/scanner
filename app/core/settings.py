@@ -45,20 +45,12 @@ class Settings(BaseSettings):
     base_dir: Path = Field(default_factory=lambda: Path(__file__).resolve().parent.parent.parent)
 
     @property
-    def watchlist_path(self) -> Path:
-        config_path = self.base_dir / "config" / "watchlist.json"
-        root_path = self.base_dir / "watchlist.json"
-        return config_path if config_path.exists() else root_path
-
-    @property
     def log_dir(self) -> Path:
         return self.base_dir / "logs"
 
     # ── Thresholds (Flagging Logic) ───────────────────────────────────────────
     volume_spike_multiplier: float = Field(1.5, alias="VOLUME_SPIKE_MULTIPLIER")
     price_change_threshold: float = Field(2.0, alias="PRICE_CHANGE_THRESHOLD")
-    volume_avg_days: int = Field(20, alias="VOLUME_AVG_DAYS")
-    support_resistance_days: int = Field(30, alias="SUPPORT_RESISTANCE_DAYS")
 
     # ── Fundamental Red Flag Thresholds ───────────────────────────────────────
     der_caution: float = Field(1.5, alias="DER_CAUTION")
@@ -88,12 +80,8 @@ class Settings(BaseSettings):
     # ── Ollama Local LLM ─────────────────────────────────────────────────────
     ollama_base_url: str = Field("http://172.20.160.1:11434", alias="OLLAMA_BASE_URL")
     ollama_text_model: str = Field("llama3.1:8b", alias="OLLAMA_TEXT_MODEL")
+    ollama_vision_model: str = Field("moondream", alias="OLLAMA_VISION_MODEL")
     ollama_timeout_seconds: int = Field(60, alias="OLLAMA_TIMEOUT_SECONDS")
-
-    # ── Schedule Settings ─────────────────────────────────────────────────────
-    daily_scan_hour: int = Field(6, alias="DAILY_SCAN_HOUR")
-    daily_scan_minute: int = Field(30, alias="DAILY_SCAN_MINUTE")
-    weekly_update_day: int = Field(5, alias="WEEKLY_UPDATE_DAY")  # 5 = Sabtu (0=Senin)
 
     # ── Validators (Opsional: untuk memastikan data masuk akal) ───────────────
     @field_validator("tavily_api_key", "discord_token", "ch_bot")

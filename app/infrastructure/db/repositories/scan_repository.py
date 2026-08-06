@@ -1,7 +1,7 @@
 """
 infrastructure/db/repositories/scan_repository.py
 ---------------------------------------------------
-Query database untuk data scan harian.
+Query database untuk data scan.
 Satu-satunya tempat yang boleh akses tabel daily_scan & news_cache.
 """
 
@@ -28,7 +28,7 @@ class ScanRepository:
     # ── Daily Scan ────────────────────────────────────────────────────────────
 
     def save_scan(self, price_data, signal: SignalFlag) -> None:
-        """Simpan hasil scan harian."""
+        """Simpan hasil scan."""
         row = DailyScan(
             ticker          = signal.ticker,
             scan_date       = signal.date,

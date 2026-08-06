@@ -15,6 +15,9 @@ class BrokerSummaryProvider(Protocol):
     async def get_latest(self, ticker: str) -> BrokerSummaryData | None:
         ...
 
+    async def get_latest_per_ticker(self, limit: int = 200) -> list[BrokerSummaryData]:
+        ...
+
 
 class ReportNotifier(Protocol):
     def send_daily_report(self, report: DailyReport) -> NotificationResult:

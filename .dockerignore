@@ -1,0 +1,40 @@
+# Docker
+docker-compose*.yml
+Dockerfile
+.dockerignore
+
+# CI/CD
+.github/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# Environment
+.env
+.env.*
+*.env
+
+# Development
+.git/
+.gitignore
+*.md
+.vscode/
+.idea/
+
+# Test & debug scripts
+scripts/debug_*.py
+scripts/test_*.py
+
+# Data files
+watchlist.json
+*.csv
+*.xlsx
+*.xls
+
+# OS
+.DS_Store
+Thumbs.db

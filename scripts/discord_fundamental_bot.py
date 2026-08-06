@@ -1,13 +1,13 @@
 """
-Discord bot untuk update fundamental, broker summary, dan tanya data DB.
+Discord bot untuk update fundamental, broker summary, scan, dan tanya data DB.
 
 Usage:
   python scripts/discord_fundamental_bot.py
 
 Kirim pesan di channel CH_BOT:
-  /add
+  /help
 
-Lalu attach file .xlsx/.xls laporan keuangan satu emiten pada pesan yang sama.
+Bot berjalan sebagai poller sehingga cocok untuk deploy sederhana tanpa public webhook.
 """
 
 import asyncio
@@ -34,6 +34,7 @@ class DiscordFundamentalBot:
     API_BASE = "https://discord.com/api/v10"
     ALLOWED_EXCEL_SUFFIXES = {".xlsx", ".xls"}
     ALLOWED_CSV_SUFFIXES = {".csv"}
+    ALLOWED_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 
     def __init__(self) -> None:
         self.settings = get_settings()
@@ -70,7 +71,9 @@ class DiscordFundamentalBot:
 
             downloaded_path: Path | None = None
             try:
-                if content == "/add":
+                if content == "/help":
+                    await self._send_message(self._help_message())
+                elif content == "/add":
                     attachment = self._get_attachment(message, self.ALLOWED_EXCEL_SUFFIXES)
                     downloaded_path = self._download_attachment(attachment, message["id"], self.ALLOWED_EXCEL_SUFFIXES)
                     attachment_filename = attachment.get("filename", "")
@@ -92,16 +95,35 @@ class DiscordFundamentalBot:
                         )
                     self._delete_message(message["id"])
                 elif content == "/broker":
-                    attachment = self._get_attachment(message, self.ALLOWED_CSV_SUFFIXES)
-                    downloaded_path = self._download_attachment(attachment, message["id"], self.ALLOWED_CSV_SUFFIXES)
-                    updated = await self.service.update_broker_summary(
-                        downloaded_path,
-                        source_file=attachment.get("filename", ""),
+                    attachment = self._get_attachment(
+                        message,
+                        self.ALLOWED_CSV_SUFFIXES | self.ALLOWED_IMAGE_SUFFIXES,
                     )
+                    suffix = Path(attachment.get("filename", "")).suffix.lower()
+                    downloaded_path = self._download_attachment(
+                        attachment,
+                        message["id"],
+                        self.ALLOWED_CSV_SUFFIXES | self.ALLOWED_IMAGE_SUFFIXES,
+                    )
+                    if suffix in self.ALLOWED_IMAGE_SUFFIXES:
+                        updated = await self.service.update_broker_summary_screenshot(
+                            downloaded_path,
+                            source_file=attachment.get("filename", ""),
+                        )
+                    else:
+                        updated = await self.service.update_broker_summary(
+                            downloaded_path,
+                            source_file=attachment.get("filename", ""),
+                        )
                     await self._send_message(
-                        f"Broker summary tersimpan: {len(updated)} saham dari watchlist diupdate."
+                        f"Broker summary tersimpan: {len(updated)} saham diupdate."
                     )
                     self._delete_message(message["id"])
+                elif content == "/scan":
+                    report = await self.service.run_daily_scan(include_news=True)
+                    result = self.service.send_daily_report(report)
+                    if not result.sent:
+                        await self._send_message(f"Scan selesai, tapi report gagal dikirim: {result.message}")
                 elif content.startswith("/ask"):
                     question = raw_content[4:].strip()
                     if not question:
@@ -117,6 +139,19 @@ class DiscordFundamentalBot:
                 if downloaded_path and downloaded_path.exists():
                     downloaded_path.unlink()
                     logger.info("Deleted uploaded temp file: %s", downloaded_path)
+
+    def _help_message(self) -> str:
+        return (
+            "**Perintah Scanner**\n"
+            "`/add` + attachment `.xlsx/.xls` - simpan fundamental emiten.\n"
+            "`/broker` + attachment `.png/.jpg/.jpeg/.webp` - parse screenshot broker summary pakai moondream.\n"
+            "`/broker` + attachment `.csv` - import broker summary dari CSV.\n"
+            "`/scan` - scan broker summary terbaru, filter fundamental, cek Tavily bila perlu, lalu kirim report.\n"
+            "`/ask rangkum` - ringkasan broker summary terbaru.\n"
+            "`/ask BBCA` - detail ticker dan trend akumulasi 5 data terakhir.\n"
+            "`/ask top akumulasi` - ranking akumulasi broker.\n"
+            "`/ask foreign net buy` - ranking foreign net buy."
+        )
 
     def _fetch_messages(self) -> list[dict[str, Any]]:
         params = {"limit": 20}
